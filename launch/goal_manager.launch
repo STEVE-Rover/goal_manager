@@ -1,0 +1,8 @@
+<launch>
+    <node name="goal_manager" type="goal_mng.py" pkg="goal_manager" output="screen">
+        <!--
+        <remap from="list_gps_goals" to="goal_manager/list_gps_goals" />
+        <remap from="gps_goal_pose" to="goal_manager/gps_goal_pose" />
+        <remap from="gps_goal_fix" to="goal_manager/gps_goal_fix" /> -->
+    </node>
+</launch>
