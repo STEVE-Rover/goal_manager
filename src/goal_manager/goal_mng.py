@@ -24,7 +24,7 @@ class MultipleGpsGoals():
         self.move_base.wait_for_server()
         rospy.loginfo("Connected.")
 
-        rospy.Subscriber('list_gps_goals', list_gps_goals, self.sendMultipleGPSGoals)
+        rospy.Subscriber('gps_goals_list', list_gps_goals, self.sendMultipleGPSGoals)
         rospy.Subscriber('gps_goal_pose', PoseStamped, self.sendPoseGoal)
         rospy.Subscriber('gps_goal_fix', NavSatFix, self.sendGPSGoal)
 
@@ -71,8 +71,11 @@ class MultipleGpsGoals():
 
 
     def sendMultipleGPSGoals(self, data):
-        for gpsGoal in data.gpsgoals:
+        rospy.loginfo("Received multiple gps goals: {}".format(data.gpsgoals))
+        for i, gpsGoal in enumerate(data.gpsgoals):
+            rospy.loginfo("Sending goal {}: {}".format(i+1, gpsGoal))
             self.sendGPSGoal(gpsGoal)
+
 
     def sendGPSGoal(self, data):
         try:

@@ -17,7 +17,7 @@ catkin_python_setup()
 
 add_message_files(
   FILES
-  list_gps_goals.msg
+  gps_goals_list.msg
 )
 
 generate_messages(
