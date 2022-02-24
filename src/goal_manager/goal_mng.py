@@ -7,7 +7,7 @@ import traceback
 
 from sensor_msgs.msg import NavSatFix
 from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
-from goal_manager.msg import gps_goal_list
+from goal_manager.msg import gps_goals_list
 from actionlib_msgs.msg import GoalStatus
 from geometry_msgs.msg import PoseStamped
 
@@ -24,7 +24,7 @@ class MultipleGpsGoals():
         self.move_base.wait_for_server()
         rospy.loginfo("Connected.")
 
-        rospy.Subscriber('gps_goals_list', gps_goal_list, self.sendMultipleGPSGoals)
+        rospy.Subscriber('gps_goals_list', gps_goals_list, self.sendMultipleGPSGoals)
         rospy.Subscriber('gps_goal_pose', PoseStamped, self.sendPoseGoal)
         rospy.Subscriber('gps_goal_fix', NavSatFix, self.sendGPSGoal)
 
