@@ -10,6 +10,7 @@ from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
 from goal_manager.msg import gps_goals_list
 from actionlib_msgs.msg import GoalStatus
 from geometry_msgs.msg import PoseStamped
+from aruco_handler import ArucoHandler
 
 from utils import *
 
@@ -20,9 +21,12 @@ class MultipleGpsGoals():
     def __init__(self):
         rospy.init_node('goal_manager', anonymous=True)
 
+        rospy.loginfo("Waiting for move_base server")
         self.move_base = actionlib.SimpleActionClient('move_base', MoveBaseAction)
         self.move_base.wait_for_server()
         rospy.loginfo("Connected.")
+
+        self.aruco_handler = ArucoHandler()
 
         rospy.Subscriber('gps_goals_list', gps_goals_list, self.sendMultipleGPSGoals)
         rospy.Subscriber('gps_goal_pose', PoseStamped, self.sendPoseGoal)
