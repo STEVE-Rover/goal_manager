@@ -4,16 +4,13 @@ import rospy
 import actionlib
 import tf
 import traceback
-
 from sensor_msgs.msg import NavSatFix
 from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
-from goal_manager.msg import gps_goals_list
+from goal_manager.msg import GpsGoal, GpsGoalArray
 from actionlib_msgs.msg import GoalStatus
 from geometry_msgs.msg import PoseStamped
 from aruco_handler import ArucoHandler
-
 from utils import *
-
 
 
 class MultipleGpsGoals():
@@ -26,23 +23,40 @@ class MultipleGpsGoals():
         self.move_base.wait_for_server()
         rospy.loginfo("Connected.")
 
+        self.rate = rospy.get_param("~rate", 2)  # Rate at which the distance to the goal is calculated
+        self.dist_threshold = rospy.get_param("~dist_threshold", 5)  # Distance at which the aruco detection is enabled
+        self.curr_fix = None
+        self.curr_goal = None
         self.aruco_handler = ArucoHandler()
 
-        rospy.Subscriber('gps_goals_list', gps_goals_list, self.sendMultipleGPSGoals)
+        rospy.Subscriber('gps_goals_list', GpsGoalArray, self.sendMultipleGPSGoals)
         rospy.Subscriber('gps_goal_pose', PoseStamped, self.sendPoseGoal)
-        rospy.Subscriber('gps_goal_fix', NavSatFix, self.sendGPSGoal)
+        rospy.Subscriber('gps_goal_fix', GpsGoal, self.gpsGoalFixCB)
+        rospy.Subscriber('fix', NavSatFix, self.fixCB)
 
         # Get the lat long coordinates of our map frame's origin which must be publshed on topic /local_xy_origin. We use this to calculate our goal within the map frame.
         self.origin_lat, self.origin_long = get_origin_lat_long()
 
+    def run(self):
+        r = rospy.Rate(self.rate)
+        while not rospy.is_shutdown():
+            if self.curr_fix != None and self.curr_goal != None and self.aruco_handler.get_mode > 0:
+                dist = calc_distance(self.curr_fix.latitude, self.curr_fix.longitude,
+                                     self.curr_goal.latitude, self.curr_goal.longitude)
+                if dist < self.dist_threshold:
+                    self.aruco_handler.enable(True)    
+            r.sleep()
+
+    def fixCB(self, data):
+        self.curr_fix = data
 
     def go_gps_goal(self, goal_lat, goal_long, z=0, yaw=0, roll=0, pitch=0):
         # Calculate goal x and y in the frame_id given the frame's origin GPS and a goal GPS location
         x, y = calc_goal(self.origin_lat, self.origin_long, goal_lat, goal_long)
         # Create move_base goal
-        self.publish_goal(x=x, y=y, z=z, yaw=yaw, roll=roll, pitch=pitch)
+        status = self.publish_goal(x=x, y=y, z=z, yaw=yaw, roll=roll, pitch=pitch)
+        return status
         
-    
     def publish_goal(self, x=0, y=0, z=0, yaw=0, roll=0, pitch=0):
         # Create move_base goal
         goal = MoveBaseGoal()
@@ -72,22 +86,22 @@ class MultipleGpsGoals():
         status = self.move_base.get_goal_status_text()
         if status:
           rospy.loginfo(status)
-
+        return status
 
     def sendMultipleGPSGoals(self, data):
-        rospy.loginfo("Received multiple gps goals: {}".format(data.gpsgoals))
-        for i, gpsGoal in enumerate(data.gpsgoals):
-            rospy.loginfo("Sending goal {}: {}".format(i+1, gpsGoal))
+        rospy.loginfo("Received multiple gps goals: {}".format(data.gps_goals))
+        for i, gpsGoal in enumerate(data.gps_goals):
+            rospy.loginfo("Sending goal {}: {} type:{}".format(i+1, gpsGoal.goal, gpsGoal.type))
             self.sendGPSGoal(gpsGoal)
 
-
     def sendGPSGoal(self, data):
-        try:
-            self.go_gps_goal(data.latitude, data.longitude)
+        try: 
+            self.aruco_handler.set_mode(data.type)
+            status = self.go_gps_goal(data.goal.latitude, data.goal.longitude)
+            if status in [2, 3, 4, 5]:
+                self.aruco_handler.enable(False)
         except:
             rospy.logwarn('*Error sending command : \n'+traceback.format_exc())
-
-
 
     def sendPoseGoal(self, data):
         lati = data.pose.position.y
@@ -105,12 +119,10 @@ class MultipleGpsGoals():
         self.go_gps_goal(lati, longi, z=z, yaw=yaw, roll=roll, pitch=pitch)
 
 
-
-
 if __name__ == '__main__':
     #gps_goal.ros_main()
-
-    MultipleGpsGoals()
-    rospy.spin()
-
-
+    try:
+        multiple_gps_goals = MultipleGpsGoals()
+        multiple_gps_goals.run()
+    except rospy.ROSInterruptException:
+        pass
