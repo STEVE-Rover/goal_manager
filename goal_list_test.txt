@@ -1,0 +1,68 @@
+"header:
+  seq: 0
+  stamp:
+    secs: 0
+    nsecs: 0
+  frame_id: ''
+gps_goals:
+- goal:
+    header:
+      seq: 0
+      stamp: {secs: 0, nsecs: 0}
+      frame_id: ''
+    status: {status: 0, service: 0}
+    latitude: 45.3772108
+    longitude: -71.9276331
+    altitude: 0.0
+    position_covariance: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    position_covariance_type: 0
+  type: 0
+- goal:
+    header:
+      seq: 0
+      stamp: {secs: 0, nsecs: 0}
+      frame_id: ''
+    status: {status: 0, service: 0}
+    latitude: 45.3772602
+    longitude: -71.9275956
+    altitude: 0.0
+    position_covariance: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    position_covariance_type: 0
+  type: 0
+- goal:
+    header:
+      seq: 0
+      stamp: {secs: 0, nsecs: 0}
+      frame_id: ''
+    status: {status: 0, service: 0}
+    latitude: 45.377341
+    longitude: -71.9275776
+    altitude: 0.0
+    position_covariance: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    position_covariance_type: 0
+  type: 0
+- goal:
+    header:
+      seq: 0
+      stamp: {secs: 0, nsecs: 0}
+      frame_id: ''
+    status: {status: 0, service: 0}
+    latitude: 45.3773419
+    longitude: -71.9274047
+    altitude: 0.0
+    position_covariance: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    position_covariance_type: 0
+  type: 0
+- goal:
+    header:
+      seq: 0
+      stamp: {secs: 0, nsecs: 0}
+      frame_id: ''
+    status: {status: 0, service: 0}
+    latitude: 45.3772751
+    longitude: -71.9272553
+    altitude: 0.0
+    position_covariance: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    position_covariance_type: 0
+  type: 0
+" 

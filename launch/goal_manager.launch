@@ -5,4 +5,13 @@
         <remap from="gps_goal_pose" to="goal_manager/gps_goal_pose" />
         <remap from="gps_goal_fix" to="goal_manager/gps_goal_fix" /> -->
     </node>
+
+    <node name="aruco_detect" type="aruco_detect" pkg="aruco_detect" >
+        <remap from="camera" to="/camera/image_raw"/>
+        <remap from="camera_info" to="/camera/camera_info"/>
+        <param name="dictionary" value="0" />
+        <param name="fiducial_len" value="0.1" />
+        <param name="publish_images" value="true" />
+    </node>
+    
 </launch>

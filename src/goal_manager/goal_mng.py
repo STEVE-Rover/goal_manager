@@ -21,17 +21,17 @@ class MultipleGpsGoals():
         rospy.loginfo("Waiting for move_base server")
         self.move_base = actionlib.SimpleActionClient('move_base', MoveBaseAction)
         self.move_base.wait_for_server()
-        rospy.loginfo("Connected.")
+        rospy.loginfo("Connected to move_base server.")
 
         self.rate = rospy.get_param("~rate", 2)  # Rate at which the distance to the goal is calculated
         self.dist_threshold = rospy.get_param("~dist_threshold", 5)  # Distance at which the aruco detection is enabled
         self.curr_fix = None
         self.curr_goal = None
-        self.aruco_handler = ArucoHandler()
+        self.goal_reached = False
+        self.aruco_handler = ArucoHandler(self)
 
         rospy.Subscriber('gps_goals_list', GpsGoalArray, self.sendMultipleGPSGoals)
         rospy.Subscriber('gps_goal_pose', PoseStamped, self.sendPoseGoal)
-        rospy.Subscriber('gps_goal_fix', GpsGoal, self.gpsGoalFixCB)
         rospy.Subscriber('fix', NavSatFix, self.fixCB)
 
         # Get the lat long coordinates of our map frame's origin which must be publshed on topic /local_xy_origin. We use this to calculate our goal within the map frame.
@@ -54,52 +54,48 @@ class MultipleGpsGoals():
         # Calculate goal x and y in the frame_id given the frame's origin GPS and a goal GPS location
         x, y = calc_goal(self.origin_lat, self.origin_long, goal_lat, goal_long)
         # Create move_base goal
-        status = self.publish_goal(x=x, y=y, z=z, yaw=yaw, roll=roll, pitch=pitch)
-        return status
-        
-    def publish_goal(self, x=0, y=0, z=0, yaw=0, roll=0, pitch=0):
-        # Create move_base goal
+        self.publish_goal_euler(x, y, z, yaw, roll, pitch)
+
+    def publish_goal_quat(self, x=0, y=0, z=0, qx=0, qy=0, qz=0, qw=1):
         goal = MoveBaseGoal()
         goal.target_pose.header.frame_id = rospy.get_param('~frame_id','map')
         goal.target_pose.pose.position.x = x
         goal.target_pose.pose.position.y = y
         goal.target_pose.pose.position.z =  z
-        quaternion = tf.transformations.quaternion_from_euler(roll, pitch, yaw)
-        goal.target_pose.pose.orientation.x = quaternion[0]
-        goal.target_pose.pose.orientation.y = quaternion[1]
-        goal.target_pose.pose.orientation.z = quaternion[2]
-        goal.target_pose.pose.orientation.w = quaternion[3]
-        rospy.loginfo('Executing move_base goal to position (x,y) %s, %s, with %s degrees yaw.' %
-                (x, y, yaw))
+        goal.target_pose.pose.orientation.x = qx
+        goal.target_pose.pose.orientation.y = qy
+        goal.target_pose.pose.orientation.z = qz
+        goal.target_pose.pose.orientation.w = qw
+        rospy.loginfo('Executing move_base goal to position (x,y) %s, %s.' %
+                (x, y))
         rospy.loginfo("To cancel the goal: 'rostopic pub -1 /move_base/cancel actionlib_msgs/GoalID -- {}'")
 
         # Send goal
-        self.move_base.send_goal(goal)
+        self.move_base.send_goal(goal, done_cb=self.goal_done_cb)
         rospy.loginfo('Inital goal status: %s' % GoalStatus.to_string(self.move_base.get_state()))
         status = self.move_base.get_goal_status_text()
         if status:
           rospy.loginfo(status)
 
         # Wait for goal result
-        self.move_base.wait_for_result()
-        rospy.loginfo('Final goal status: %s' % GoalStatus.to_string(self.move_base.get_state()))
-        status = self.move_base.get_goal_status_text()
-        if status:
-          rospy.loginfo(status)
-        return status
+        
+    def publish_goal_euler(self, x, y, z, yaw, roll, pitch):
+        quaternion = tf.transformations.quaternion_from_euler(roll, pitch, yaw)
+        self.publish_goal_quat(x, y, z, quaternion[0], quaternion[1], quaternion[2], quaternion[3])
 
     def sendMultipleGPSGoals(self, data):
         rospy.loginfo("Received multiple gps goals: {}".format(data.gps_goals))
         for i, gpsGoal in enumerate(data.gps_goals):
             rospy.loginfo("Sending goal {}: {} type:{}".format(i+1, gpsGoal.goal, gpsGoal.type))
             self.sendGPSGoal(gpsGoal)
+            self.wait_for_goal_reached()
+            #TODO: wait for a few seconds and change the LED color
 
     def sendGPSGoal(self, data):
         try: 
             self.aruco_handler.set_mode(data.type)
-            status = self.go_gps_goal(data.goal.latitude, data.goal.longitude)
-            if status in [2, 3, 4, 5]:
-                self.aruco_handler.enable(False)
+            self.goal_reached = False
+            self.go_gps_goal(data.goal.latitude, data.goal.longitude)
         except:
             rospy.logwarn('*Error sending command : \n'+traceback.format_exc())
 
@@ -118,9 +114,29 @@ class MultipleGpsGoals():
         yaw = euler[2]
         self.go_gps_goal(lati, longi, z=z, yaw=yaw, roll=roll, pitch=pitch)
 
+    def goal_done_cb(self, state, result):
+        """! Callback function for the move_base goal.
+        @param state  Action state.
+        @param result  Action result
+        """
+        rospy.loginfo('Final goal status: %s' % GoalStatus.to_string(state))
+        if not self.aruco_handler.override:
+            self.goal_reached = True
+
+        # if state == GoalStatus.SUCCEEDED:
+        #     pass
+        # elif state == GoalStatus.SUCCEEDED and self.retry == True:
+        #     pass
+        # elif state == GoalStatus.ABORTED:
+        #     rospy.loginfo("Aborted goal")
+
+    def wait_for_goal_reached(self):
+        r = rospy.Rate(5)
+        while not rospy.is_shutdown() and not self.goal_reached:
+            r.sleep()
+
 
 if __name__ == '__main__':
-    #gps_goal.ros_main()
     try:
         multiple_gps_goals = MultipleGpsGoals()
         multiple_gps_goals.run()

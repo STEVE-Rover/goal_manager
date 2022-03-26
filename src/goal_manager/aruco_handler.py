@@ -1,12 +1,17 @@
 #!/usr/bin/env python
 
 import rospy
+import weakref
 from math import sqrt
 from fiducial_msgs.msg import FiducialTransformArray
 from std_srvs.srv import SetBool
 
+#TODO: ArucoHandler should disable itself when the goal is reached
 class ArucoHandler:
-    def __init__(self):
+    def __init__(self, parent):
+        self.parent = weakref.ref(parent)
+        self.override = False
+        rospy.loginfo("Waiting for aruco_detect")
         rospy.wait_for_service('/aruco_detect/enable_detections')
         self.mode = 0  # 0: nothing, 1: post mode, 2: gate mode
         self.duplicate_dist_thresh = rospy.get_param("~duplicate_dist_thresh", 0.25)
@@ -16,7 +21,7 @@ class ArucoHandler:
         rospy.Subscriber("fiducial_transforms", FiducialTransformArray, self.fiducials_cb)
 
     def set_mode(self, mode):
-        if 1 <= mode <= 2:
+        if 0 <= mode <= 2:
             self.mode = mode
         else:
             rospy.logerr("Invalid mode")
@@ -30,6 +35,7 @@ class ArucoHandler:
             if state:
                 rospy.loginfo("Enabling detection")
             else:
+                self.override = False
                 rospy.loginfo("Disabling detection")
             return resp.success
         except rospy.ServiceException as e:
@@ -43,8 +49,7 @@ class ArucoHandler:
             if len(msg.transforms) != 1:
                 return
             else:
-                # TODO: commit
-                pass
+                self.commit_post(msg.transforms[0].transform)
 
         elif self.mode == 2:  # Gate
             if len(msg.transform) != 2:
@@ -79,6 +84,23 @@ class ArucoHandler:
                 filtered_fiducials.append(fiducial)
             ids.append(fiducial.fiducial_id)
         return filtered_fiducials
+
+    def commit_post(self, transform):
+        self.override = True
+        # The transform is in the camera frame, with the Z axis pointing out of the lens
+        transform.translation.z -= 1  # Offset the goal 1m in front of the post
+        # Ignore the fiducial's orientation, we just want the rover to reach the position
+        # TODO: make sure this orientation is valid for move_base
+        transform.quatenion.x = 0
+        transform.quatenion.y = 0
+        transform.quatenion.z = 0
+        transform.quatenion.w = 1
+        self.parent.publish_goal_quat(transform.translation.x, transform.translation.y, transform.translation.z,
+                                      transform.rotation.x, transform.rotation.y, transform.rotation.z, transform.rotation.w)
+
+    def commit_gate(self, transform1, transform2):
+        self.override = True
+        #TODO: complete this function
 
 
 def calc_dist(position1, position2):
