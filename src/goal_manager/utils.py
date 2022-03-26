@@ -25,7 +25,6 @@ def DMS_to_decimal_format(lat,long):
 
   lat = float(lat)
   long = float(long)
-  rospy.loginfo('Given GPS goal: lat %s, long %s.' % (lat, long))
   return lat, long
 
 
@@ -42,16 +41,13 @@ def get_origin_lat_long():
 def calc_goal(origin_lat, origin_long, goal_lat, goal_long):
   g = calc_geodesic(origin_lat, origin_long, goal_lat, goal_long)
   hypotenuse = distance = g['s12'] # access distance
-  rospy.loginfo("The distance from the origin to the goal is {:.3f} m.".format(distance))
   azimuth = g['azi1']
-  rospy.loginfo("The azimuth from the origin to the goal is {:.3f} degrees.".format(azimuth))
 
   # Convert polar (distance and azimuth) to x,y translation in meters (needed for ROS) by finding side lenghs of a right-angle triangle
   # Convert azimuth to radians
   azimuth = math.radians(azimuth)
   y = adjacent = math.cos(azimuth) * hypotenuse
   x = opposite = math.sin(azimuth) * hypotenuse
-  rospy.loginfo("The translation from the origin to the goal is (x,y) {:.3f}, {:.3f} m.".format(x, y))
 
   return x, y
 

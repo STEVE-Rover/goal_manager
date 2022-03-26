@@ -28,7 +28,7 @@ gps_goals:
     altitude: 0.0
     position_covariance: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     position_covariance_type: 0
-  type: 0
+  type: 1
 - goal:
     header:
       seq: 0

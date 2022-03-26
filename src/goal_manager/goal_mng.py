@@ -13,7 +13,7 @@ from aruco_handler import ArucoHandler
 from utils import *
 
 
-class MultipleGpsGoals():
+class MultipleGpsGoals:
 
     def __init__(self):
         rospy.init_node('goal_manager', anonymous=True)
@@ -30,20 +30,21 @@ class MultipleGpsGoals():
         self.goal_reached = False
         self.aruco_handler = ArucoHandler(self)
 
+        # Get the lat long coordinates of our map frame's origin which must be publshed on topic /local_xy_origin. We use this to calculate our goal within the map frame.
+        self.origin_lat, self.origin_long = get_origin_lat_long()
+
         rospy.Subscriber('gps_goals_list', GpsGoalArray, self.sendMultipleGPSGoals)
         rospy.Subscriber('gps_goal_pose', PoseStamped, self.sendPoseGoal)
         rospy.Subscriber('fix', NavSatFix, self.fixCB)
 
-        # Get the lat long coordinates of our map frame's origin which must be publshed on topic /local_xy_origin. We use this to calculate our goal within the map frame.
-        self.origin_lat, self.origin_long = get_origin_lat_long()
-
     def run(self):
         r = rospy.Rate(self.rate)
         while not rospy.is_shutdown():
-            if self.curr_fix != None and self.curr_goal != None and self.aruco_handler.get_mode > 0:
+            if self.curr_fix != None and self.curr_goal != None and self.aruco_handler.mode > 0:
                 dist = calc_distance(self.curr_fix.latitude, self.curr_fix.longitude,
                                      self.curr_goal.latitude, self.curr_goal.longitude)
-                if dist < self.dist_threshold:
+                rospy.loginfo("Distance to goal: %.2f" % dist)
+                if not self.aruco_handler.enabled and dist < self.dist_threshold:
                     self.aruco_handler.enable(True)    
             r.sleep()
 
@@ -66,13 +67,9 @@ class MultipleGpsGoals():
         goal.target_pose.pose.orientation.y = qy
         goal.target_pose.pose.orientation.z = qz
         goal.target_pose.pose.orientation.w = qw
-        rospy.loginfo('Executing move_base goal to position (x,y) %s, %s.' %
-                (x, y))
-        rospy.loginfo("To cancel the goal: 'rostopic pub -1 /move_base/cancel actionlib_msgs/GoalID -- {}'")
 
         # Send goal
         self.move_base.send_goal(goal, done_cb=self.goal_done_cb)
-        rospy.loginfo('Inital goal status: %s' % GoalStatus.to_string(self.move_base.get_state()))
         status = self.move_base.get_goal_status_text()
         if status:
           rospy.loginfo(status)
@@ -84,9 +81,10 @@ class MultipleGpsGoals():
         self.publish_goal_quat(x, y, z, quaternion[0], quaternion[1], quaternion[2], quaternion[3])
 
     def sendMultipleGPSGoals(self, data):
-        rospy.loginfo("Received multiple gps goals: {}".format(data.gps_goals))
+        rospy.loginfo("Received multiple gps goals")
         for i, gpsGoal in enumerate(data.gps_goals):
-            rospy.loginfo("Sending goal {}: {} type:{}".format(i+1, gpsGoal.goal, gpsGoal.type))
+            rospy.loginfo("Sending goal {}: lat={} long={} type={}".format(i+1, gpsGoal.goal.latitude, gpsGoal.goal.longitude, gpsGoal.type))
+            self.curr_goal = gpsGoal.goal
             self.sendGPSGoal(gpsGoal)
             self.wait_for_goal_reached()
             #TODO: wait for a few seconds and change the LED color
@@ -120,9 +118,11 @@ class MultipleGpsGoals():
         @param result  Action result
         """
         rospy.loginfo('Final goal status: %s' % GoalStatus.to_string(state))
-        if not self.aruco_handler.override:
+        if not self.aruco_handler.enabled:
             self.goal_reached = True
-
+        elif self.aruco_handler.goal_in_progess:
+            self.goal_reached = True
+            self.aruco_handler.enable(False)
         # if state == GoalStatus.SUCCEEDED:
         #     pass
         # elif state == GoalStatus.SUCCEEDED and self.retry == True:
