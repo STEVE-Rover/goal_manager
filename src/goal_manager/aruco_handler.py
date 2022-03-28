@@ -1,16 +1,19 @@
 #!/usr/bin/env python
 
 import rospy
-from math import sqrt
+import tf
+from math import sqrt, cos, pi
 from fiducial_msgs.msg import FiducialTransformArray
+from geometry_msgs.msg import PoseStamped
 from std_srvs.srv import SetBool
 
-#TODO: ArucoHandler should disable itself when the goal is reached
 class ArucoHandler:
     def __init__(self, parent):
-        self.parent = parent
+        self.tf_listener = tf.TransformListener()
         rospy.loginfo("Waiting for aruco_detect")
         rospy.wait_for_service('/aruco_detect/enable_detections')
+        self.parent = parent
+        self.map_frame = "map"
         self.mode = 0  # 0: nothing, 1: post mode, 2: gate mode
         self.enabled = False
         self.goal_in_progess = False
@@ -48,14 +51,13 @@ class ArucoHandler:
                 return
             # TODO: recommit if the distance between the current tag and the previous detection is significant
             elif not self.goal_in_progess:
-                self.commit_post(msg.transforms[0].transform)
+                self.commit_post(msg.transforms[0].transform, msg.header)
 
         elif self.mode == 2:  # Gate
             if len(msg.transform) != 2:
                 return
             else:
-                # TODO: commit
-                pass
+                self.commit_gate(msg.transform[0].transform, msg.transform[1].transform, msg.header)
         
     def is_fiducials_valid(self, fiducials):
         ids = []
@@ -85,27 +87,61 @@ class ArucoHandler:
         return filtered_fiducials
 
 
-    def commit_post(self, transform):
+    def commit_post(self, transform, header):
         rospy.loginfo("Post found! Creating goal.")
         self.goal_in_progess = True
+        pose_cam_frame = transform_to_pose_stamped(transform, header)
         # The transform is in the camera frame, with the Z axis pointing out of the lens
-        transform.translation.z -= 1  # Offset the goal 1m in front of the post
+        pose_cam_frame.pose.position.z -= 1  # Offset the goal 1m in front of the post
         # Ignore the fiducial's orientation, we just want the rover to reach the position
-        # TODO: make sure this orientation is valid for move_base
-        transform.rotation.x = 0
-        transform.rotation.y = 0
-        transform.rotation.z = 0
-        transform.rotation.w = 1
-        # TODO: transform into the map frame before publishing the goal
-        self.parent.publish_goal_quat(transform.translation.x, transform.translation.y, transform.translation.z,
-                                      transform.rotation.x, transform.rotation.y, transform.rotation.z, transform.rotation.w)
+        pose_cam_frame.pose.orientation.x = 0
+        pose_cam_frame.pose.orientation.y = 0
+        pose_cam_frame.pose.orientation.z = 0
+        pose_cam_frame.pose.orientation.w = 1
+        pose_map_frame = self.tf_listener.transformPose(self.map_frame, pose_cam_frame)
+        print("Quaternion: x=%.2f y=%.2f z=%.2f w=%.2f" % (pose_map_frame.pose.orientation.x, pose_map_frame.pose.orientation.y, 
+                                                           pose_map_frame.pose.orientation.z, pose_map_frame.pose.orientation.w))
+        self.parent.publish_goal_quat(pose_map_frame.pose.position.x, pose_map_frame.pose.position.y, pose_map_frame.pose.position.z,
+                                      pose_map_frame.pose.orientation.x, pose_map_frame.pose.orientation.y, pose_map_frame.pose.orientation.z, 
+                                      pose_map_frame.pose.orientation.w)
 
     def commit_gate(self, transform1, transform2):
         pass
         #TODO: complete this function
+
+    def transform_to_map_frame(self, transform, header):
+        """! Transforms a fiducial transform into the map frame.
+        @param transform  Fiducial transform.
+        @param header  Header from the FiducialTransformArray message
+        @return  The pose in the map frame or None if the transformed failed.
+        """
+        pose_cam_frame = self.transform_to_pose_stamped(transform, header)
+        try:
+            pose_map_frame = self.listener.transformPose(self.map_frame, pose_cam_frame)
+            return pose_map_frame
+        except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+            return None
 
 
 def calc_dist(position1, position2):
     return sqrt((position2.x - position1.x)**2 + 
                 (position2.y - position1.y)**2 +
                 (position2.z - position1.z)**2)
+
+
+def transform_to_pose_stamped(transform, header):
+        """! Converts a fiducial transform to a geometry_msgs/PoseStamped message.
+        @param transform  Fiducial transform.
+        @param header  Header from the FiducialTransformArray message
+        @return  PoseStamped message
+        """
+        pose = PoseStamped()
+        pose.header = header
+        pose.pose.position.x = transform.translation.x
+        pose.pose.position.y = transform.translation.y
+        pose.pose.position.z = transform.translation.z
+        pose.pose.orientation.x = transform.rotation.x
+        pose.pose.orientation.y = transform.rotation.y
+        pose.pose.orientation.z = transform.rotation.z
+        pose.pose.orientation.w = transform.rotation.w
+        return pose

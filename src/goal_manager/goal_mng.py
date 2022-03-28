@@ -40,12 +40,13 @@ class MultipleGpsGoals:
     def run(self):
         r = rospy.Rate(self.rate)
         while not rospy.is_shutdown():
-            if self.curr_fix != None and self.curr_goal != None and self.aruco_handler.mode > 0:
+            if self.curr_fix != None and self.curr_goal != None:
                 dist = calc_distance(self.curr_fix.latitude, self.curr_fix.longitude,
-                                     self.curr_goal.latitude, self.curr_goal.longitude)
+                                        self.curr_goal.latitude, self.curr_goal.longitude)
                 rospy.loginfo("Distance to goal: %.2f" % dist)
-                if not self.aruco_handler.enabled and dist < self.dist_threshold:
-                    self.aruco_handler.enable(True)    
+                if 0 < self.aruco_handler.mode < 2:
+                    if not self.aruco_handler.enabled and dist < self.dist_threshold:
+                        self.aruco_handler.enable(True)    
             r.sleep()
 
     def fixCB(self, data):
@@ -88,6 +89,8 @@ class MultipleGpsGoals:
             self.sendGPSGoal(gpsGoal)
             self.wait_for_goal_reached()
             #TODO: wait for a few seconds and change the LED color
+        self.curr_goal = None
+        rospy.loginfo("Multiple waypoint trajectory completed.")
 
     def sendGPSGoal(self, data):
         try: 
@@ -119,16 +122,13 @@ class MultipleGpsGoals:
         """
         rospy.loginfo('Final goal status: %s' % GoalStatus.to_string(state))
         if not self.aruco_handler.enabled:
+            print("First condition")
             self.goal_reached = True
         elif self.aruco_handler.goal_in_progess:
+            print("Second condition")
             self.goal_reached = True
             self.aruco_handler.enable(False)
-        # if state == GoalStatus.SUCCEEDED:
-        #     pass
-        # elif state == GoalStatus.SUCCEEDED and self.retry == True:
-        #     pass
-        # elif state == GoalStatus.ABORTED:
-        #     rospy.loginfo("Aborted goal")
+            self.curr_goal = None
 
     def wait_for_goal_reached(self):
         r = rospy.Rate(5)
