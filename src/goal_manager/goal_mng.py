@@ -12,6 +12,8 @@ from geometry_msgs.msg import PoseStamped
 from aruco_handler import ArucoHandler
 from utils import *
 
+#TODO: "Operators may at any point send a signal to the rover to abort the current attempt and
+#       autonomously return to the previous post/gate or GNSS coordinate and stop within 10 m of it."
 
 class MultipleGpsGoals:
 
@@ -89,6 +91,7 @@ class MultipleGpsGoals:
             self.sendGPSGoal(gpsGoal)
             self.wait_for_goal_reached()
             #TODO: wait for a few seconds and change the LED color
+            rospy.loginfo("Goal %d reached" % i+1)
         self.curr_goal = None
         rospy.loginfo("Multiple waypoint trajectory completed.")
 
@@ -120,15 +123,13 @@ class MultipleGpsGoals:
         @param state  Action state.
         @param result  Action result
         """
-        rospy.loginfo('Final goal status: %s' % GoalStatus.to_string(state))
+        rospy.loginfo('move_base status: %s' % GoalStatus.to_string(state))
         if not self.aruco_handler.enabled:
-            print("First condition")
             self.goal_reached = True
         elif self.aruco_handler.goal_in_progess:
-            print("Second condition")
             self.goal_reached = True
             self.aruco_handler.enable(False)
-            self.curr_goal = None
+        self.curr_goal = None
 
     def wait_for_goal_reached(self):
         r = rospy.Rate(5)

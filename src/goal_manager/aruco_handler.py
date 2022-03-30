@@ -3,8 +3,9 @@
 import rospy
 import tf
 from math import sqrt, cos, pi
+from copy import deepcopy
 from fiducial_msgs.msg import FiducialTransformArray
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, Transform
 from std_srvs.srv import SetBool
 
 class ArucoHandler:
@@ -99,15 +100,18 @@ class ArucoHandler:
         pose_cam_frame.pose.orientation.z = 0
         pose_cam_frame.pose.orientation.w = 1
         pose_map_frame = self.tf_listener.transformPose(self.map_frame, pose_cam_frame)
-        print("Quaternion: x=%.2f y=%.2f z=%.2f w=%.2f" % (pose_map_frame.pose.orientation.x, pose_map_frame.pose.orientation.y, 
-                                                           pose_map_frame.pose.orientation.z, pose_map_frame.pose.orientation.w))
         self.parent.publish_goal_quat(pose_map_frame.pose.position.x, pose_map_frame.pose.position.y, pose_map_frame.pose.position.z,
                                       pose_map_frame.pose.orientation.x, pose_map_frame.pose.orientation.y, pose_map_frame.pose.orientation.z, 
                                       pose_map_frame.pose.orientation.w)
 
     def commit_gate(self, transform1, transform2):
-        pass
-        #TODO: complete this function
+        # TODO: test this function
+        rospy.loginfo("Gate found! Creating goal.")
+        midpoint = get_midpoint(transform1, transform2)
+        pose_map_frame = self.tf_listener.transformPose(self.map_frame, midpoint)
+        self.parent.publish_goal_quat(pose_map_frame.pose.position.x, pose_map_frame.pose.position.y, pose_map_frame.pose.position.z,
+                                      pose_map_frame.pose.orientation.x, pose_map_frame.pose.orientation.y, pose_map_frame.pose.orientation.z, 
+                                      pose_map_frame.pose.orientation.w)
 
     def transform_to_map_frame(self, transform, header):
         """! Transforms a fiducial transform into the map frame.
@@ -145,3 +149,16 @@ def transform_to_pose_stamped(transform, header):
         pose.pose.orientation.z = transform.rotation.z
         pose.pose.orientation.w = transform.rotation.w
         return pose
+
+    
+def get_midpoint(transform1, transform2):
+    middle = Transform()
+    middle.translation.x = (transform1.translation.x + transform2.translation.x) / 2
+    middle.translation.y = (transform1.translation.y + transform2.translation.y) / 2
+    middle.translation.z = (transform1.translation.z + transform2.translation.z) / 2
+    middle.pose.orientation.x = 0
+    middle.pose.orientation.y = 0
+    middle.pose.orientation.z = 0
+    middle.pose.orientation.w = 1
+    return middle
+
