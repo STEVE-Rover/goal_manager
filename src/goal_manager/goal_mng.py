@@ -10,6 +10,7 @@ from goal_manager.msg import GpsGoal, GpsGoalArray
 from actionlib_msgs.msg import GoalStatus
 from geometry_msgs.msg import PoseStamped
 from aruco_handler import ArucoHandler
+from std_srvs.srv import Empty, EmptyResponse
 from utils import *
 
 #TODO: "Operators may at any point send a signal to the rover to abort the current attempt and
@@ -31,9 +32,15 @@ class MultipleGpsGoals:
         self.curr_goal = None
         self.goal_reached = False
         self.aruco_handler = ArucoHandler(self)
+        self.continue_to_next = False
+        self.return_to_previous = False
 
         # Get the lat long coordinates of our map frame's origin which must be publshed on topic /local_xy_origin. We use this to calculate our goal within the map frame.
         self.origin_lat, self.origin_long = get_origin_lat_long()
+
+        # Services
+        self.continue_service = rospy.Service('goal_manager/continue', Empty, self.handle_continue_service)
+        self.return_to_previous_service = rospy.Service('goal_manager/return_to_previous', Empty, self.handle_return_to_previous)
 
         rospy.Subscriber('gps_goals_list', GpsGoalArray, self.sendMultipleGPSGoals)
         rospy.Subscriber('gps_goal_pose', PoseStamped, self.sendPoseGoal)
@@ -76,8 +83,6 @@ class MultipleGpsGoals:
         status = self.move_base.get_goal_status_text()
         if status:
           rospy.loginfo(status)
-
-        # Wait for goal result
         
     def publish_goal_euler(self, x, y, z, yaw, roll, pitch):
         quaternion = tf.transformations.quaternion_from_euler(roll, pitch, yaw)
@@ -85,13 +90,21 @@ class MultipleGpsGoals:
 
     def sendMultipleGPSGoals(self, data):
         rospy.loginfo("Received multiple gps goals")
-        for i, gpsGoal in enumerate(data.gps_goals):
+        i = 0
+        while i < len(data.gps_goals):
+            gpsGoal = data.gps_goals[i]
             rospy.loginfo("Sending goal {}: lat={} long={} type={}".format(i+1, gpsGoal.goal.latitude, gpsGoal.goal.longitude, gpsGoal.type))
             self.curr_goal = gpsGoal.goal
             self.sendGPSGoal(gpsGoal)
-            self.wait_for_goal_reached()
-            #TODO: wait for a few seconds and change the LED color
-            rospy.loginfo("Goal %d reached" % i+1)
+            state = self.wait_for_goal_reached()
+            if not state:
+                i -= 1
+                rospy.loginfo("Returning to goal" % (i+1))
+            else:
+                rospy.loginfo("Goal %d reached" % (i+1))
+                i += 1
+            if not i == len(data.gps_goals):
+                self.wait_for_continue()
         self.curr_goal = None
         rospy.loginfo("Multiple waypoint trajectory completed.")
 
@@ -134,7 +147,27 @@ class MultipleGpsGoals:
     def wait_for_goal_reached(self):
         r = rospy.Rate(5)
         while not rospy.is_shutdown() and not self.goal_reached:
+            if self.return_to_previous:
+                self.return_to_previous = False
+                return False
             r.sleep()
+        return True
+
+    def wait_for_continue(self):
+        rospy.loginfo("Waiting for user input before continuing to next goal.")
+        r = rospy.Rate(5)
+        while not rospy.is_shutdown() and not self.continue_to_next:
+            r.sleep()
+        self.continue_to_next = False
+
+    def handle_continue_service(self, req):
+        if self.goal_reached:
+            self.continue_to_next = True
+        return EmptyResponse()
+
+    def handle_return_to_previous(self, req):
+        self.return_to_previous = True
+        return EmptyResponse()
 
 
 if __name__ == '__main__':
