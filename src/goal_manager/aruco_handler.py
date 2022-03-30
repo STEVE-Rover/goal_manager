@@ -18,6 +18,8 @@ class ArucoHandler:
         self.mode = 0  # 0: nothing, 1: post mode, 2: gate mode
         self.enabled = False
         self.goal_in_progess = False
+        self.committed_post_pose = None
+        self.committed_gate_pose = None
         self.duplicate_dist_thresh = rospy.get_param("~duplicate_dist_thresh", 0.25)
         self.enable_detections_service = rospy.ServiceProxy('/aruco_detect/enable_detections', SetBool)
         self.enable(False)
@@ -53,12 +55,16 @@ class ArucoHandler:
             # TODO: recommit if the distance between the current tag and the previous detection is significant
             elif not self.goal_in_progess:
                 self.commit_post(msg.transforms[0].transform, msg.header)
+            else:
+                self.recommit_post(msg.transforms[0].transform, msg.header)
 
         elif self.mode == 2:  # Gate
             if len(msg.transform) != 2:
                 return
-            else:
+            elif not self.goal_in_progess:
                 self.commit_gate(msg.transform[0].transform, msg.transform[1].transform, msg.header)
+            else:
+                self.recommit_gate(msg.transform[0].transform, msg.transform[1].transform, msg.header)
         
     def is_fiducials_valid(self, fiducials):
         ids = []
@@ -90,7 +96,6 @@ class ArucoHandler:
 
     def commit_post(self, transform, header):
         rospy.loginfo("Post found! Creating goal.")
-        self.goal_in_progess = True
         pose_cam_frame = transform_to_pose_stamped(transform, header)
         # The transform is in the camera frame, with the Z axis pointing out of the lens
         pose_cam_frame.pose.position.z -= 1  # Offset the goal 1m in front of the post
@@ -100,18 +105,55 @@ class ArucoHandler:
         pose_cam_frame.pose.orientation.z = 0
         pose_cam_frame.pose.orientation.w = 1
         pose_map_frame = self.tf_listener.transformPose(self.map_frame, pose_cam_frame)
+        self.committed_post_pose = pose_map_frame
+        self.goal_in_progess = True
         self.parent.publish_goal_quat(pose_map_frame.pose.position.x, pose_map_frame.pose.position.y, pose_map_frame.pose.position.z,
                                       pose_map_frame.pose.orientation.x, pose_map_frame.pose.orientation.y, pose_map_frame.pose.orientation.z, 
                                       pose_map_frame.pose.orientation.w)
+
+    def recommit_post(self, transform, header):
+        # TODO: test this function
+        # TODO: Refactor to avoid duplicate code with commit_gate
+        pose_cam_frame = transform_to_pose_stamped(transform, header)
+        # The transform is in the camera frame, with the Z axis pointing out of the lens
+        pose_cam_frame.pose.position.z -= 1  # Offset the goal 1m in front of the post
+        # Ignore the fiducial's orientation, we just want the rover to reach the position
+        pose_cam_frame.pose.orientation.x = 0
+        pose_cam_frame.pose.orientation.y = 0
+        pose_cam_frame.pose.orientation.z = 0
+        pose_cam_frame.pose.orientation.w = 1
+        pose_map_frame = self.tf_listener.transformPose(self.map_frame, pose_cam_frame)
+        if calc_dist(pose_map_frame.pose.position, self.committed_post_pose.pose.position) > 0.5:
+            rospy.loginfo("Recommitting post")
+            self.committed_post_pose = pose_map_frame
+            self.goal_in_progess = True
+            self.parent.publish_goal_quat(pose_map_frame.pose.position.x, pose_map_frame.pose.position.y, pose_map_frame.pose.position.z,
+                                        pose_map_frame.pose.orientation.x, pose_map_frame.pose.orientation.y, pose_map_frame.pose.orientation.z, 
+                                        pose_map_frame.pose.orientation.w)
 
     def commit_gate(self, transform1, transform2):
         # TODO: test this function
         rospy.loginfo("Gate found! Creating goal.")
         midpoint = get_midpoint(transform1, transform2)
         pose_map_frame = self.tf_listener.transformPose(self.map_frame, midpoint)
+        self.committed_gate_pose = pose_map_frame
+        self.goal_in_progess = True
         self.parent.publish_goal_quat(pose_map_frame.pose.position.x, pose_map_frame.pose.position.y, pose_map_frame.pose.position.z,
                                       pose_map_frame.pose.orientation.x, pose_map_frame.pose.orientation.y, pose_map_frame.pose.orientation.z, 
                                       pose_map_frame.pose.orientation.w)
+
+    def recommit_gate(self, transform1, transform2):
+        # TODO: test this function
+        # TODO: Refactor to avoid duplicate code with commit_gate
+        midpoint = get_midpoint(transform1, transform2)
+        pose_map_frame = self.tf_listener.transformPose(self.map_frame, midpoint)
+        if calc_dist(pose_map_frame.pose.position, self.committed_gate_pose.pose.position) > 0.5:
+            rospy.loginfo("Recommitting gate")
+            self.committed_gate_pose = pose_map_frame
+            self.goal_in_progess = True
+            self.parent.publish_goal_quat(pose_map_frame.pose.position.x, pose_map_frame.pose.position.y, pose_map_frame.pose.position.z,
+                                        pose_map_frame.pose.orientation.x, pose_map_frame.pose.orientation.y, pose_map_frame.pose.orientation.z, 
+                                        pose_map_frame.pose.orientation.w)
 
     def transform_to_map_frame(self, transform, header):
         """! Transforms a fiducial transform into the map frame.
