@@ -27,12 +27,19 @@ class ArucoHandler:
         rospy.Subscriber("fiducial_transforms", FiducialTransformArray, self.fiducials_cb)
 
     def set_mode(self, mode):
+        """! Sets the search mode according to the goal type.
+        @param mode  Int representing the mode (nothing(0), post(1) or gate(2))
+        """
         if 0 <= mode <= 2:
             self.mode = mode
         else:
             rospy.logerr("Invalid mode")
 
     def enable(self, state):
+        """! Function that calls the aruco_ros service to enables/disables the tag detection.
+        @param state  Bool representing on(True) or off(False)
+        @return Boolean indicating if the service call was successful.
+        """
         try:
             self.enabled = state
             resp = self.enable_detections_service(state)
@@ -46,13 +53,15 @@ class ArucoHandler:
             rospy.logerr("Service call failed: %s"%e)
 
     def fiducials_cb(self, msg):
+        """! Callback function for the aruco tag detections.
+        @param msg fiducial_msgs/FiducialTransformArray
+        """
         if len(msg.transforms) == 0 or not self.is_fiducials_valid(msg):
             return
         msg.transforms = self.remove_duplicates(msg.transforms)
         if self.mode == 1:  # Post
             if len(msg.transforms) != 1:
                 return
-            # TODO: recommit if the distance between the current tag and the previous detection is significant
             elif not self.goal_in_progess:
                 self.commit_post(msg.transforms[0].transform, msg.header)
             else:
@@ -67,6 +76,10 @@ class ArucoHandler:
                 self.recommit_gate(msg.transform[0].transform, msg.transform[1].transform, msg.header)
         
     def is_fiducials_valid(self, fiducials):
+        """! Checks the validity of detected fiducials based on the id and distance.
+        @param fiducials fiducial_msgs/FiducialTransformArray
+        @return Boolean indicating if the fiducials are valid or not.
+        """
         ids = []
         id_indexes = []
         for i in range(len(fiducials.transforms)):
@@ -85,6 +98,10 @@ class ArucoHandler:
         return True
 
     def remove_duplicates(self, fiducials):
+        """! Removes duplicates if multiple fiducials with the same id are found.
+        @param msg fiducial_msgs/FiducialTransformArray
+        @return The list of fiducials without duplicates.
+        """
         ids = []
         filtered_fiducials = []
         for fiducial in fiducials:
@@ -95,6 +112,10 @@ class ArucoHandler:
 
 
     def commit_post(self, transform, header):
+        """! Saves a fiducial as a post goal to be sent to move_base.
+        @param transform fiducial_msgs/FiducialTransform
+        @param header std_msgs/Header of the transforms
+        """
         rospy.loginfo("Post found! Creating goal.")
         pose_cam_frame = transform_to_pose_stamped(transform, header)
         # The transform is in the camera frame, with the Z axis pointing out of the lens
@@ -112,6 +133,11 @@ class ArucoHandler:
                                       pose_map_frame.pose.orientation.w)
 
     def recommit_post(self, transform, header):
+        """! Re-saves a fiducial as a post goal to be sent to move_base if the position is significantly different
+        from where it was previously detected.
+        @param transform fiducial_msgs/FiducialTransform
+        @param header std_msgs/Header of the transforms
+        """
         # TODO: test this function
         # TODO: Refactor to avoid duplicate code with commit_gate
         pose_cam_frame = transform_to_pose_stamped(transform, header)
@@ -132,6 +158,11 @@ class ArucoHandler:
                                         pose_map_frame.pose.orientation.w)
 
     def commit_gate(self, transform1, transform2):
+        """! Saves a fiducial as a gate goal to be sent to move_base.
+        @param transform1 fiducial_msgs/FiducialTransform of the first gate fiducial
+        @param transform2 fiducial_msgs/FiducialTransform of the second gate fiducial
+        @param header std_msgs/Header of the transforms
+        """
         # TODO: test this function
         rospy.loginfo("Gate found! Creating goal.")
         midpoint = get_midpoint(transform1, transform2)
@@ -143,6 +174,12 @@ class ArucoHandler:
                                       pose_map_frame.pose.orientation.w)
 
     def recommit_gate(self, transform1, transform2):
+        """! Re-saves a fiducial as a gate goal to be sent to move_base if the position is significantly different
+        from where it was previously detected.
+        @param transform1 fiducial_msgs/FiducialTransform of the first gate fiducial
+        @param transform2 fiducial_msgs/FiducialTransform of the second gate fiducial
+        @param header std_msgs/Header of the transforms
+        """
         # TODO: test this function
         # TODO: Refactor to avoid duplicate code with commit_gate
         midpoint = get_midpoint(transform1, transform2)
@@ -170,6 +207,11 @@ class ArucoHandler:
 
 
 def calc_dist(position1, position2):
+    """! Calculates the euclidean distance between two 3D points
+        @param position1  geometry_msgs/Point for the first point.
+        @param position2  geometry_msgs/Point for the second point.
+        @return  Euclidean distance.
+    """
     return sqrt((position2.x - position1.x)**2 + 
                 (position2.y - position1.y)**2 +
                 (position2.z - position1.z)**2)
@@ -194,6 +236,11 @@ def transform_to_pose_stamped(transform, header):
 
     
 def get_midpoint(transform1, transform2):
+    """! Calculates the midpoint of two transforms.
+        @param transform1 fiducial_msgs/FiducialTransform of the first gate fiducial
+        @param transform2 fiducial_msgs/FiducialTransform of the second gate fiducial
+        @return  fiducial_msgs/FiducialTransform of the midpoint
+        """
     middle = Transform()
     middle.translation.x = (transform1.translation.x + transform2.translation.x) / 2
     middle.translation.y = (transform1.translation.y + transform2.translation.y) / 2
