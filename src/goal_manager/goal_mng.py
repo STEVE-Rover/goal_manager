@@ -30,6 +30,7 @@ class MultipleGpsGoals:
         self.dist_threshold = rospy.get_param("~dist_threshold", 5)  # Distance at which the aruco detection is enabled
         self.curr_fix = None
         self.curr_goal = None
+        self.i = 0  # Index of the active goal
         self.goal_reached = False
         self.aruco_handler = ArucoHandler(self)
         self.continue_to_next = False
@@ -89,21 +90,19 @@ class MultipleGpsGoals:
         self.publish_goal_quat(x, y, z, quaternion[0], quaternion[1], quaternion[2], quaternion[3])
 
     def sendMultipleGPSGoals(self, data):
+        # TODO: The start position should be in the list so that it is possible to return to it
         rospy.loginfo("Received multiple gps goals")
-        i = 0
-        while i < len(data.gps_goals):
-            gpsGoal = data.gps_goals[i]
-            rospy.loginfo("Sending goal {}: lat={} long={} type={}".format(i+1, gpsGoal.goal.latitude, gpsGoal.goal.longitude, gpsGoal.type))
+        self.i = 0
+        while self.i < len(data.gps_goals):
+            gpsGoal = data.gps_goals[self.i]
+            rospy.loginfo("Sending goal {}: lat={} long={} type={}".format(self.i+1, gpsGoal.goal.latitude, gpsGoal.goal.longitude, gpsGoal.type))
             self.curr_goal = gpsGoal.goal
             self.sendGPSGoal(gpsGoal)
-            state = self.wait_for_goal_reached()
-            if not state:
-                i -= 1
-                rospy.loginfo("Returning to goal" % (i+1))
-            else:
-                rospy.loginfo("Goal %d reached" % (i+1))
-                i += 1
-            if not i == len(data.gps_goals):
+            success = self.wait_for_goal_reached()
+            if success:
+                rospy.loginfo("Goal %d reached" % (self.i+1))
+                self.i += 1
+            if not self.i == len(data.gps_goals) and success:
                 self.wait_for_continue()
         self.curr_goal = None
         rospy.loginfo("Multiple waypoint trajectory completed.")
@@ -148,7 +147,10 @@ class MultipleGpsGoals:
         r = rospy.Rate(5)
         while not rospy.is_shutdown() and not self.goal_reached:
             if self.return_to_previous:
+                print("In wait_for_goal_reached")
                 self.return_to_previous = False
+                self.i -= 1
+                rospy.loginfo("Returning to goal %d" % (self.i+1))
                 return False
             r.sleep()
         return True
@@ -157,6 +159,12 @@ class MultipleGpsGoals:
         rospy.loginfo("Waiting for user input before continuing to next goal.")
         r = rospy.Rate(5)
         while not rospy.is_shutdown() and not self.continue_to_next:
+            if self.return_to_previous:
+                print("In wait_for_continue")
+                self.return_to_previous = False
+                self.i -= 2
+                rospy.loginfo("Returning to goal %d" % (self.i+1))
+                return
             r.sleep()
         self.continue_to_next = False
 
