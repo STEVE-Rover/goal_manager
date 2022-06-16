@@ -29,7 +29,7 @@ def DMS_to_decimal_format(lat,long):
 
 
 def get_origin_lat_long():
-  # Get the lat long coordinates of our map frame's origin which must be publshed on topic /local_xy_origin. We use this to calculate our goal within the map frame.
+  # Get the lat long coordinates of our map frame's origin which must be published on topic /local_xy_origin. We use this to calculate our goal within the map frame.
   rospy.loginfo("Waiting for a message to initialize the origin GPS location...")
   origin_pose = rospy.wait_for_message('local_xy_origin', PoseStamped)
   origin_lat = origin_pose.pose.position.y
@@ -43,7 +43,7 @@ def calc_goal(origin_lat, origin_long, goal_lat, goal_long):
   hypotenuse = distance = g['s12'] # access distance
   azimuth = g['azi1']
 
-  # Convert polar (distance and azimuth) to x,y translation in meters (needed for ROS) by finding side lenghs of a right-angle triangle
+  # Convert polar (distance and azimuth) to x,y translation in meters (needed for ROS) by finding side lengths of a right-angle triangle
   # Convert azimuth to radians
   azimuth = math.radians(azimuth)
   y = adjacent = math.cos(azimuth) * hypotenuse
