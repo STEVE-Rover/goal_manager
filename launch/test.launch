@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<launch>
+
+    <arg name="name" default="camera" />
+
+    <include file="$(find goal_manager)/launch/goal_manager.launch" />
+
+    <node name="aruco_detect" type="aruco_detect" pkg="aruco_detect" >
+        <remap from="camera" to="/camera/image_raw"/>
+        <remap from="camera_info" to="/camera/camera_info"/>
+        <param name="dictionary" value="0" />
+        <param name="fiducial_len" value="0.1" />
+        <param name="publish_images" value="true" />
+    </node>
+
+   <include file="$(find video_stream_opencv)/launch/camera.launch">
+        <arg name="camera_name" value="$(arg name)" />
+        <arg name="video_stream_provider" value="0" />
+        <arg name="set_camera_fps" value="30"/>
+        <arg name="buffer_queue_size" value="100" />
+        <arg name="fps" value="30" />
+        <arg name="frame_id" value="$(arg name)_link" />
+        <arg name="camera_info_url" value="file:///$(find steve_cam)/config/xps15_7590_camera_info.yaml" />
+        <arg name="flip_horizontal" value="false" />
+        <arg name="flip_vertical" value="false" />
+        <arg name="visualize" value="false" />
+        <arg name="width" default="1280"/>
+        <arg name="height" default="720"/>
+   </include>
+
+   <param name="/$(arg name)/image_raw/compressed/jpeg_quality" value="75" />
+
+</launch>

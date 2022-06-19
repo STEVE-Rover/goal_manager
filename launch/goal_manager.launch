@@ -5,4 +5,7 @@
         <remap from="gps_goal_pose" to="goal_manager/gps_goal_pose" />
         <remap from="gps_goal_fix" to="goal_manager/gps_goal_fix" /> -->
     </node>
+
+    <include file="$(find steve_cam)/launch/aruco_detect.launch" />
+    
 </launch>

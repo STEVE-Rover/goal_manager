@@ -3,3 +3,4 @@
 *.swo
 build_isolated/
 devel_isolated/
+.vscode
